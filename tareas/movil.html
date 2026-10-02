@@ -1,0 +1,422 @@
+<title>Gestor de tareas</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,700&family=Figtree:wght@400;500;600&display=swap">
+<style>
+/* Layout: una columna móvil — cabecera con resumen, chips de filtro, tarjetas de tarea, botón flotante que abre una hoja inferior */
+:root {
+  --bg: #f2f3f7;
+  --surface: #ffffff;
+  --ink: #161a2c;
+  --muted: #5c6382;
+  --line: #dde0ea;
+  --accent: #2f45c4;
+  --accent-ink: #ffffff;
+  --danger: #c62f2f;
+  --shadow: 0 1px 2px rgb(22 26 44 / .06), 0 4px 14px rgb(22 26 44 / .05);
+  --font-display: "Bricolage Grotesque", "Segoe UI", system-ui, sans-serif;
+  --font-body: "Figtree", system-ui, -apple-system, sans-serif;
+  --r: 14px;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #10121c; --surface: #1a1d2b; --ink: #eceef6; --muted: #9aa0bd;
+    --line: #2c3045; --accent: #7d8ff5; --accent-ink: #0d1020; --danger: #f07171;
+    --shadow: 0 1px 2px rgb(0 0 0 / .4); color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #10121c; --surface: #1a1d2b; --ink: #eceef6; --muted: #9aa0bd;
+  --line: #2c3045; --accent: #7d8ff5; --accent-ink: #0d1020; --danger: #f07171;
+  --shadow: 0 1px 2px rgb(0 0 0 / .4); color-scheme: dark;
+}
+
+* { box-sizing: border-box; }
+body {
+  background: var(--bg); color: var(--ink);
+  font: 16px/1.45 var(--font-body);
+  padding-inline: 16px; padding-block: 20px 110px;
+}
+.wrap { max-width: 640px; margin: 0 auto; display: grid; gap: 18px; }
+h1, h2 { font-family: var(--font-display); text-wrap: balance; margin: 0; letter-spacing: -.01em; }
+h1 { font-size: 1.9rem; }
+h2 { font-size: 1.2rem; }
+button, select, input, textarea { font: inherit; color: inherit; }
+button { cursor: pointer; }
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+header { display: grid; gap: 6px; }
+.resumen { color: var(--muted); font-size: .95rem; font-variant-numeric: tabular-nums; }
+.aviso { background: var(--surface); border: 1px dashed var(--line); border-radius: var(--r); padding: 12px 14px; color: var(--muted); font-size: .9rem; }
+
+.barra { display: flex; gap: 8px; align-items: center; }
+.chips { display: flex; gap: 8px; overflow-x: auto; padding-bottom: 4px; scrollbar-width: none; flex: 1; min-width: 0; }
+.chips::-webkit-scrollbar { display: none; }
+.chip {
+  flex: none; border: 1px solid var(--line); background: var(--surface);
+  border-radius: 999px; padding: 7px 13px; font-size: .9rem; white-space: nowrap;
+  display: inline-flex; align-items: center; gap: 7px; font-variant-numeric: tabular-nums;
+}
+.chip .punto { width: 9px; height: 9px; border-radius: 50%; background: var(--c); }
+.chip[aria-pressed="true"] { background: var(--ink); color: var(--bg); border-color: var(--ink); }
+.icono { flex: none; border: 1px solid var(--line); background: var(--surface); border-radius: 999px; padding: 7px 12px; font-size: .9rem; }
+
+.lista { display: grid; gap: 10px; list-style: none; margin: 0; padding: 0; }
+.tarea {
+  background: var(--surface); border-radius: var(--r); box-shadow: var(--shadow);
+  padding: 14px 14px 12px 18px; display: grid; gap: 8px; position: relative; overflow: hidden;
+}
+.tarea::before { content: ""; position: absolute; inset: 0 auto 0 0; width: 5px; background: var(--c); }
+.tarea h3 { margin: 0; font-size: 1.05rem; font-weight: 600; overflow-wrap: anywhere; }
+.tarea.hecha h3 { text-decoration: line-through; text-decoration-color: var(--muted); }
+.tarea p { margin: 0; color: var(--muted); overflow-wrap: anywhere; white-space: pre-line; }
+.pie { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; justify-content: space-between; }
+.fecha { font-size: .8rem; color: var(--muted); font-variant-numeric: tabular-nums; }
+.estado-sel {
+  appearance: none; -webkit-appearance: none; border: 0; border-radius: 999px;
+  background: var(--c); color: #fff; font-weight: 600; font-size: .85rem;
+  padding: 6px 30px 6px 12px; max-width: 100%;
+  background-image: linear-gradient(45deg, transparent 50%, #fff 50%), linear-gradient(135deg, #fff 50%, transparent 50%);
+  background-position: calc(100% - 15px) 55%, calc(100% - 10px) 55%;
+  background-size: 5px 5px; background-repeat: no-repeat;
+}
+.acciones { display: flex; gap: 4px; }
+.mini { border: 0; background: none; color: var(--muted); padding: 6px 8px; border-radius: 8px; font-size: .88rem; }
+.mini:hover { background: var(--bg); }
+.mini.peligro { color: var(--danger); }
+
+.vacio { text-align: center; color: var(--muted); padding: 32px 12px; background: var(--surface); border-radius: var(--r); }
+
+.fab {
+  position: fixed; right: 18px; bottom: calc(20px + env(safe-area-inset-bottom, 0px));
+  border: 0; border-radius: 999px; background: var(--accent); color: var(--accent-ink);
+  padding: 15px 22px; font-weight: 600; box-shadow: 0 6px 20px rgb(47 69 196 / .35);
+}
+
+/* Hoja inferior */
+.velo { position: fixed; inset: 0; background: rgb(10 12 24 / .45); display: grid; align-items: end; justify-items: center; z-index: 10; }
+.hoja {
+  background: var(--surface); width: 100%; max-width: 640px; max-height: 88%;
+  overflow-y: auto; border-radius: 20px 20px 0 0;
+  padding: 18px 16px calc(20px + env(safe-area-inset-bottom, 0px));
+  display: grid; gap: 14px;
+}
+@media (prefers-reduced-motion: no-preference) {
+  .hoja { animation: sube .22s ease-out; }
+  @keyframes sube { from { transform: translateY(24px); opacity: .6; } }
+}
+.hoja-cab { display: flex; justify-content: space-between; align-items: center; }
+form { display: grid; gap: 12px; }
+label { display: grid; gap: 5px; font-weight: 600; font-size: .9rem; }
+.campo { width: 100%; border: 1px solid var(--line); background: var(--bg); border-radius: 10px; padding: 11px 12px; font-weight: 400; }
+textarea.campo { resize: vertical; min-height: 70px; }
+.opciones { display: flex; flex-wrap: wrap; gap: 8px; }
+.opcion input { position: absolute; opacity: 0; pointer-events: none; }
+.opcion span { display: inline-flex; align-items: center; gap: 7px; border: 1px solid var(--line); border-radius: 999px; padding: 7px 12px; font-weight: 500; }
+.opcion span::before { content: ""; width: 9px; height: 9px; border-radius: 50%; background: var(--c); }
+.opcion input:checked + span { border-color: var(--c); box-shadow: inset 0 0 0 1px var(--c); }
+.opcion input:focus-visible + span { outline: 2px solid var(--accent); outline-offset: 2px; }
+.btn { border: 0; border-radius: 10px; padding: 12px 16px; font-weight: 600; background: var(--accent); color: var(--accent-ink); }
+.btn.sec { background: var(--bg); color: var(--ink); }
+.btn.peligro { background: var(--danger); color: #fff; }
+.fila { display: flex; gap: 8px; flex-wrap: wrap; }
+.fila > * { flex: 1; }
+.error { color: var(--danger); font-size: .9rem; margin: 0; }
+
+.estados { list-style: none; margin: 0; padding: 0; display: grid; }
+.estados li { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 10px 0; border-bottom: 1px solid var(--line); }
+.estados .nombre { display: inline-flex; align-items: center; gap: 9px; min-width: 0; overflow-wrap: anywhere; }
+.estados .nombre::before { content: ""; flex: none; width: 12px; height: 12px; border-radius: 50%; background: var(--c); }
+.estados .n { color: var(--muted); font-size: .85rem; font-variant-numeric: tabular-nums; }
+.nuevo-estado { display: flex; gap: 8px; }
+.nuevo-estado .campo { flex: 1; min-width: 0; }
+.nuevo-estado input[type=color] { width: 46px; height: 46px; border: 1px solid var(--line); border-radius: 10px; padding: 3px; background: var(--bg); flex: none; }
+</style>
+
+<div class="wrap">
+  <header>
+    <h1>Gestor de tareas</h1>
+    <div class="resumen" id="resumen">Cargando tus tareas…</div>
+  </header>
+  <div class="aviso" id="aviso" hidden></div>
+  <div class="barra">
+    <div class="chips" id="chips" role="toolbar" aria-label="Filtrar por estado"></div>
+    <button class="icono" id="btn-estados" type="button">Estados</button>
+  </div>
+  <ul class="lista" id="lista"></ul>
+  <div class="vacio" id="vacio" hidden></div>
+</div>
+
+<button class="fab" id="fab" type="button">+ Nueva tarea</button>
+
+<div class="velo" id="velo-tarea" hidden>
+  <div class="hoja" role="dialog" aria-modal="true" aria-labelledby="titulo-hoja">
+    <div class="hoja-cab">
+      <h2 id="titulo-hoja">Nueva tarea</h2>
+      <button class="mini" type="button" data-cerrar>Cerrar</button>
+    </div>
+    <form id="form-tarea">
+      <label>Título
+        <input class="campo" id="f-titulo" name="titulo" required maxlength="200" autocomplete="off">
+      </label>
+      <label>Descripción
+        <textarea class="campo" id="f-desc" name="descripcion" maxlength="2000"></textarea>
+      </label>
+      <div>
+        <div style="font-weight:600;font-size:.9rem;margin-bottom:6px">Estado</div>
+        <div class="opciones" id="f-estados"></div>
+      </div>
+      <p class="error" id="f-error" hidden></p>
+      <div class="fila">
+        <button class="btn" type="submit" id="f-guardar">Agregar tarea</button>
+      </div>
+      <div class="fila" id="f-borrar-fila" hidden>
+        <button class="btn sec" type="button" id="f-borrar">Eliminar tarea</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<div class="velo" id="velo-estados" hidden>
+  <div class="hoja" role="dialog" aria-modal="true" aria-labelledby="titulo-estados">
+    <div class="hoja-cab">
+      <h2 id="titulo-estados">Estados</h2>
+      <button class="mini" type="button" data-cerrar>Cerrar</button>
+    </div>
+    <ul class="estados" id="lista-estados"></ul>
+    <form class="nuevo-estado" id="form-estado">
+      <input class="campo" id="e-nombre" placeholder="Nuevo estado, p. ej. En revisión" required maxlength="40" autocomplete="off">
+      <input type="color" id="e-color" value="#8a3fd1" aria-label="Color del estado">
+      <button class="btn" type="submit">Agregar</button>
+    </form>
+    <p class="error" id="e-error" hidden></p>
+  </div>
+</div>
+
+<script>
+(() => {
+  const $ = (id) => document.getElementById(id);
+  const st = { estados: [], tareas: [], filtro: null, editando: null, borrarPend: null, db: null, cargado: { e: false, t: false } };
+
+  try { st.filtro = localStorage.getItem("filtro") || null; } catch (_) {}
+
+  const fecha = (iso) => {
+    if (!iso) return "";
+    try { return new Date(iso).toLocaleString("es", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" }); }
+    catch (_) { return iso; }
+  };
+  const estadoDe = (id) => st.estados.find((e) => e.id === id);
+  const el = (tag, props = {}, ...hijos) => {
+    const n = document.createElement(tag);
+    for (const [k, v] of Object.entries(props)) {
+      if (k === "style") n.style.cssText = v;
+      else if (k.startsWith("on")) n.addEventListener(k.slice(2), v);
+      else if (v !== undefined && v !== null && v !== false) n.setAttribute(k, v === true ? "" : v);
+    }
+    for (const h of hijos) if (h != null) n.append(h);
+    return n;
+  };
+
+  function aviso(txt) { $("aviso").textContent = txt; $("aviso").hidden = !txt; }
+
+  // ----- Render -----
+  function render() {
+    const cuenta = {};
+    for (const t of st.tareas) cuenta[t.estadoId] = (cuenta[t.estadoId] || 0) + 1;
+    const final = st.estados[st.estados.length - 1];
+    const listo = st.cargado.e && st.cargado.t;
+
+    if (listo) {
+      const total = st.tareas.length;
+      const hechas = final ? (cuenta[final.id] || 0) : 0;
+      $("resumen").textContent = total === 0 ? "Sin tareas todavía"
+        : `${total} ${total === 1 ? "tarea" : "tareas"} · ${hechas} en «${final.nombre}»`;
+    }
+
+    if (st.filtro && !estadoDe(st.filtro)) st.filtro = null;
+    const chips = $("chips");
+    chips.replaceChildren(
+      el("button", { class: "chip", type: "button", "aria-pressed": String(!st.filtro), onclick: () => filtrar(null) }, `Todas ${st.tareas.length}`),
+      ...st.estados.map((e) => el("button", {
+        class: "chip", type: "button", style: `--c:${e.color}`, "aria-pressed": String(st.filtro === e.id), onclick: () => filtrar(e.id),
+      }, el("span", { class: "punto" }), `${e.nombre} ${cuenta[e.id] || 0}`))
+    );
+
+    const orden = new Map(st.estados.map((e, i) => [e.id, i]));
+    const visibles = st.tareas
+      .filter((t) => !st.filtro || t.estadoId === st.filtro)
+      .sort((a, b) => (orden.get(a.estadoId) ?? 99) - (orden.get(b.estadoId) ?? 99) || String(b.actualizada).localeCompare(String(a.actualizada)));
+
+    $("lista").replaceChildren(...visibles.map(tarjeta));
+    const vacio = $("vacio");
+    vacio.hidden = !listo || visibles.length > 0;
+    if (!st.estados.length) vacio.textContent = "Primero crea un estado con el botón «Estados».";
+    else vacio.textContent = st.filtro ? "No hay tareas en este estado." : "Aún no hay tareas. Toca «+ Nueva tarea» para crear la primera.";
+
+    renderEstados(cuenta);
+  }
+
+  function tarjeta(t) {
+    const e = estadoDe(t.estadoId) || { color: "#888", nombre: "Sin estado" };
+    const final = st.estados[st.estados.length - 1];
+    const sel = el("select", { class: "estado-sel", "aria-label": "Cambiar estado", onchange: (ev) => cambiarEstado(t, ev.target.value) },
+      ...st.estados.map((x) => el("option", { value: x.id, selected: x.id === t.estadoId }, x.nombre)));
+    const confirmando = st.borrarPend === t.id;
+    return el("li", { class: "tarea" + (final && t.estadoId === final.id ? " hecha" : ""), style: `--c:${e.color}` },
+      el("h3", {}, t.titulo),
+      t.descripcion ? el("p", {}, t.descripcion) : null,
+      el("div", { class: "pie" },
+        sel,
+        confirmando
+          ? el("div", { class: "acciones" },
+              el("button", { class: "mini peligro", type: "button", onclick: () => borrar(t.id) }, "Sí, eliminar"),
+              el("button", { class: "mini", type: "button", onclick: () => { st.borrarPend = null; render(); } }, "No"))
+          : el("div", { class: "acciones" },
+              el("button", { class: "mini", type: "button", onclick: () => abrirTarea(t) }, "Editar"),
+              el("button", { class: "mini peligro", type: "button", onclick: () => { st.borrarPend = t.id; render(); } }, "Eliminar"))),
+      el("div", { class: "fecha" }, "Actualizada " + fecha(t.actualizada)));
+  }
+
+  function renderEstados(cuenta) {
+    $("lista-estados").replaceChildren(...st.estados.map((e) => {
+      const n = cuenta[e.id] || 0;
+      return el("li", { style: `--c:${e.color}` },
+        el("span", { class: "nombre" }, e.nombre),
+        el("span", { class: "acciones" },
+          el("span", { class: "n" }, `${n} ${n === 1 ? "tarea" : "tareas"}`),
+          el("button", {
+            class: "mini peligro", type: "button", disabled: n > 0,
+            title: n > 0 ? "Mueve sus tareas a otro estado antes de eliminarlo" : null,
+            onclick: () => borrarEstado(e.id),
+          }, "Eliminar")));
+    }));
+  }
+
+  function filtrar(id) {
+    st.filtro = id;
+    try { id ? localStorage.setItem("filtro", id) : localStorage.removeItem("filtro"); } catch (_) {}
+    render();
+  }
+
+  // ----- Hojas -----
+  function abrir(id) { $(id).hidden = false; }
+  function cerrar(id) { $(id).hidden = true; }
+  document.querySelectorAll(".velo").forEach((v) => {
+    v.addEventListener("click", (ev) => { if (ev.target === v || ev.target.hasAttribute("data-cerrar")) v.hidden = true; });
+  });
+  document.addEventListener("keydown", (ev) => { if (ev.key === "Escape") document.querySelectorAll(".velo").forEach((v) => (v.hidden = true)); });
+
+  function abrirTarea(t) {
+    if (!st.estados.length) { abrir("velo-estados"); return; }
+    st.editando = t || null;
+    $("titulo-hoja").textContent = t ? "Editar tarea" : "Nueva tarea";
+    $("f-guardar").textContent = t ? "Guardar cambios" : "Agregar tarea";
+    $("f-titulo").value = t ? t.titulo : "";
+    $("f-desc").value = t ? t.descripcion || "" : "";
+    $("f-error").hidden = true;
+    $("f-borrar-fila").hidden = !t;
+    const actual = t ? t.estadoId : (st.filtro || st.estados[0].id);
+    $("f-estados").replaceChildren(...st.estados.map((e) => el("label", { class: "opcion", style: `--c:${e.color}` },
+      el("input", { type: "radio", name: "estado", value: e.id, checked: e.id === actual }), el("span", {}, e.nombre))));
+    abrir("velo-tarea");
+    setTimeout(() => $("f-titulo").focus(), 50);
+  }
+  $("fab").addEventListener("click", () => abrirTarea(null));
+  $("btn-estados").addEventListener("click", () => { $("e-error").hidden = true; abrir("velo-estados"); });
+
+  // ----- Datos -----
+  const ahora = () => new Date().toISOString();
+  const nuevoId = () => Math.random().toString(36).slice(2, 10) + Date.now().toString(36);
+
+  async function guardar(col, id, data) {
+    if (st.db) await st.db.collection(col).doc(id).set(data);
+    else local(col, id, data);
+  }
+  async function quitar(col, id) {
+    if (st.db) await st.db.collection(col).doc(id).delete();
+    else local(col, id, null);
+  }
+  function local(col, id, data) {
+    const arr = col === "tareas" ? st.tareas : st.estados;
+    const i = arr.findIndex((x) => x.id === id);
+    if (data === null) { if (i >= 0) arr.splice(i, 1); }
+    else if (i >= 0) arr[i] = { id, ...data }; else arr.push({ id, ...data });
+    if (col === "estados") arr.sort((a, b) => a.orden - b.orden);
+    render();
+  }
+  const sinId = ({ id, ...rest }) => rest;
+  function fallo(dest, err) {
+    const msg = err && err.code === "quota_exceeded" ? "Se alcanzó el límite de almacenamiento. Elimina algunas tareas e inténtalo de nuevo."
+      : err && err.code === "invalid_argument" ? "No tienes permiso para modificar esta lista."
+      : "No se pudo guardar. Revisa tu conexión e inténtalo de nuevo.";
+    if (dest) { $(dest).textContent = msg; $(dest).hidden = false; } else aviso(msg);
+  }
+
+  $("form-tarea").addEventListener("submit", async (ev) => {
+    ev.preventDefault();
+    const titulo = $("f-titulo").value.trim();
+    const estadoId = (document.querySelector('#f-estados input:checked') || {}).value;
+    if (!titulo) { $("f-error").textContent = "Escribe un título."; $("f-error").hidden = false; return; }
+    if (!estadoId) { $("f-error").textContent = "Elige un estado."; $("f-error").hidden = false; return; }
+    const t = st.editando;
+    const data = { titulo, descripcion: $("f-desc").value.trim(), estadoId, creada: t ? t.creada : ahora(), actualizada: ahora() };
+    try { await guardar("tareas", t ? t.id : nuevoId(), data); cerrar("velo-tarea"); }
+    catch (err) { fallo("f-error", err); }
+  });
+  $("f-borrar").addEventListener("click", async () => {
+    const b = $("f-borrar");
+    if (b.dataset.seguro !== "1") { b.dataset.seguro = "1"; b.textContent = "Toca otra vez para eliminar"; b.className = "btn peligro"; return; }
+    b.dataset.seguro = ""; b.textContent = "Eliminar tarea"; b.className = "btn sec";
+    await borrar(st.editando.id); cerrar("velo-tarea");
+  });
+
+  async function cambiarEstado(t, estadoId) {
+    try { await guardar("tareas", t.id, { ...sinId(t), estadoId, actualizada: ahora() }); }
+    catch (err) { fallo(null, err); render(); }
+  }
+  async function borrar(id) {
+    st.borrarPend = null;
+    try { await quitar("tareas", id); } catch (err) { fallo(null, err); }
+    render();
+  }
+
+  $("form-estado").addEventListener("submit", async (ev) => {
+    ev.preventDefault();
+    const nombre = $("e-nombre").value.trim();
+    if (!nombre) return;
+    if (st.estados.some((e) => e.nombre.toLowerCase() === nombre.toLowerCase())) {
+      $("e-error").textContent = "Ya existe un estado con ese nombre."; $("e-error").hidden = false; return;
+    }
+    const orden = st.estados.reduce((m, e) => Math.max(m, e.orden ?? 0), -1) + 1;
+    try {
+      await guardar("estados", nuevoId(), { nombre, color: $("e-color").value, orden });
+      $("e-nombre").value = ""; $("e-error").hidden = true;
+    } catch (err) { fallo("e-error", err); }
+  });
+  async function borrarEstado(id) {
+    if (st.tareas.some((t) => t.estadoId === id)) return;
+    try { await quitar("estados", id); } catch (err) { fallo("e-error", err); }
+  }
+
+  // ----- Arranque -----
+  render();
+  const modoLocal = () => {
+    st.cargado = { e: true, t: true };
+    aviso("No se pudo conectar con el almacenamiento: los cambios solo duran mientras esta página esté abierta. Inicia sesión en Claude para guardarlos.");
+    render();
+  };
+  if (!window.claude || !window.claude.use) { modoLocal(); return; }
+  window.claude.use("db").then((db) => {
+    if (!db) { modoLocal(); return; }
+    st.db = db;
+    const err = (e) => { if (e && e.code !== "unavailable") aviso("Se perdió la conexión con el almacenamiento. Recarga la página."); };
+    db.collection("estados").orderBy("orden").onSnapshot((s) => {
+      st.estados = s.docs.map((d) => ({ id: d.id, ...d.data() }));
+      st.cargado.e = true; render();
+    }, err);
+    db.collection("tareas").onSnapshot((s) => {
+      st.tareas = s.docs.map((d) => ({ id: d.id, ...d.data() }));
+      st.cargado.t = true; render();
+    }, err);
+  }, modoLocal);
+})();
+</script>
